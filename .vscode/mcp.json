@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"alm-v2-prd": {
+			"url": "https://alm-ai-gateway.digital.oocl.com/v2/mcp",
+			"transport": "http",
+			"type": "http"
+		}
+	}
+}

@@ -1,0 +1,272 @@
+{
+	// MNLSAP code snippets for ABAP Development
+
+	// ------------------ ABAP -------------------- //
+	"Flowerbox New": {
+		"scope": "abap",
+    "prefix": "fbox-new",
+    "body": [
+      "*&---------------------------------------------------------------------*",
+      "*& Report  ${1:ZREPORTNAME}                                            *",
+      "*&---------------------------------------------------------------------*",
+      "*& Purpose     : ${2:What it does} *",
+      "*& Description : ${3:[ST000000]CODE - SCR Description} *",
+      "*& Author      : ${4:First Name Last Name (DOMAIN)}                        *",
+      "*& Date        : ${5:DD Mmm YYYY}                                          *",
+      "*&---------------------------------------------------------------------*",
+      "*& Revision    :                                                       *",
+      "*&             :                                                       *",
+      "*& Revised by  :                                                       *",
+      "*& Revised on  :                                                       *",
+      "*& Search Str  :                                                       *",
+      "*&---------------------------------------------------------------------*",
+      ""
+    ],
+    "description": "Flowerbox New snippet"
+  },
+
+	"Flowerbox Revision": {
+    "scope": "abap",
+    "prefix": "fbox-rev",
+    "body": [
+      "*& Revision    : ${1:Story/Task}  *",
+      "*&             :                                   *",
+      "*& Revised by  : ${2:Person Owner}                          *",
+      "*& Revised on  : ${3:Date}                                           *",
+      "*& Search Str  : ${4:Search String}                                            *",
+      "*&---------------------------------------------------------------------*",
+      "*& Revision    :                                                       *",
+      "*&             :                                                       *",
+      "*& Revised by  :                                                       *",
+      "*& Revised on  :                                                       *",
+      "*& Search Str  :                                                       *",
+      "*&---------------------------------------------------------------------*",
+      ""
+    ],
+    "description": "Flowerbox Revision snippet"
+  },
+
+		"New Program Template": {
+    "scope": "abap",
+    "prefix": "new-prog",
+    "body": [
+      "*&---------------------------------------------------------------------*",
+      "*& Report  ${1:ZREPORTNAME}                                            *",
+      "*&---------------------------------------------------------------------*",
+      "*& Purpose     : ${2:What it does} *",
+      "*& Description : ${3:[ST000000]CODE - SCR Description} *",
+      "*& Author      : ${4:First Name Last Name (DOMAIN)}                        *",
+      "*& Date        : ${5:DD Mmm YYYY}                                          *",
+      "*&---------------------------------------------------------------------*",
+      "*& Revision    :                                                       *",
+      "*&             :                                                       *",
+      "*& Revised by  :                                                       *",
+      "*& Revised on  :                                                       *",
+      "*& Search Str  :                                                       *",
+      "*&---------------------------------------------------------------------*",
+      "",
+			"REPORT ${1:ZREPORTNAME}.",
+      "\tLINE-SIZE 255",
+    	"\tLINE-COUNT 60",
+      "\tMESSAGE-ID zb",
+      "\tNO STANDARD PAGE HEADING.",
+			"",
+			"*&---------------------------------------------------------------------*",
+			"*&\t\tPARAMETERS                                                       *",
+			"*&---------------------------------------------------------------------*",
+			"SELECTION-SCREEN: BEGIN OF BLOCK b1   WITH FRAME TITLE text-001.",
+			"PARAMETERS      : p_param1            TYPE c LENGTH 10.",
+			"SELECTION-SCREEN: END OF BLOCK b1.",
+			"",
+			"*&---------------------------------------------------------------------*",
+			"*&\t\tGLOBAL VARIABLES                                                 *",
+			"*&---------------------------------------------------------------------*",
+			"TYPES:",
+			"\tBEGIN OF gty_variable1_type",
+			"\t\tdummy                             TYPE c LENGTH 10.",
+			"\tEND OF gty_variable1_type.",
+			"",
+			"DATA:" ,
+			"\tgv_variable1                        TYPE c LENGTH 10.",  
+			"",
+			"CONSTANTS:",
+			"\tgc_variable1                        TYPE c LENGTH 10 VALUE 'X'.",
+			"",
+			"*&---------------------------------------------------------------------*",
+			"*&\t\tSTART-OF-SELECTION                                               *",
+			"*&---------------------------------------------------------------------*",
+			"START-OF-SELECTION."
+    ],
+    "description": "New Program snippet"
+  },
+
+		"Header Form": {
+    "scope": "abap",
+    "prefix": "hdr-form",
+    "body": [
+			"*&---------------------------------------------------------------------*",
+			"*&\t\tFORM ${1:form_name}                                        *",
+			"*&---------------------------------------------------------------------*"
+    ],
+    "description": "Header form snippet"
+  },
+
+		"Form Definition": {
+    "scope": "abap",
+    "prefix": "form-def",
+    "body": [
+			"*&---------------------------------------------------------------------*",
+			"*&    FORM ${1:form_name}                                        *",
+			"*&---------------------------------------------------------------------*",
+      "FORM ${1:form_name}.",
+      "\t${0}",
+      "ENDFORM.                                               \"${1:form_name}",
+			""
+    ],
+    "description": "Form definition snippet"
+  },
+
+		"Generic Header": {
+    "scope": "abap",
+    "prefix": "hdr-generic",
+    "body": [
+			"*&---------------------------------------------------------------------*",
+			"*&\t\t ${1:header_name}                                     *",
+			"*&---------------------------------------------------------------------*"
+    ],
+    "description": "Generic Header snippet"
+  },
+	
+		"Line": {
+    "scope": "abap",
+    "prefix": "line",
+    "body": [
+			"*&---------------------------------------------------------------------*",
+    ],
+    "description": "Line snippet"
+  },
+
+		"Select Query": {
+    "scope": "abap",
+    "prefix": "select",
+    "body": [
+			"SELECT *",
+			"\tFROM ${1:table}",
+			"\tINTO TABLE ${2:itab}",
+			"\tWHERE ${3:condition}."
+    ],
+    "description": "Select query snippet"
+  },
+
+		"Loop At": {
+    "scope": "abap",
+    "prefix": "loop",
+    "body": [
+			"LOOP AT ${1:itab} INTO ${2:wa}.",
+			"\t${0}",
+			"ENDLOOP.",
+			""
+    ],
+    "description": "Loop At snippet"
+  },
+
+		"Added Revision": {
+    "scope": "abap",
+    "prefix": "added",
+    "body": [
+			"*{ Added ${1:Search Str}",
+			"${0}",
+			"*} Added ${1:Search Str}"
+    ],
+    "description": "Added Revision snippet"
+  },
+
+		"Added Revision Start": {
+    "scope": "abap",
+    "prefix": "added-1",
+    "body": [
+			"*{ Added ${1:Search Str}",
+    ],
+    "description": "Added Revision Start snippet"
+  },
+
+		"Added Revision End": {
+    "scope": "abap",
+    "prefix": "added-2",
+    "body": [
+			"*} Added ${1:Search Str}",
+    ],
+    "description": "Added Revision End snippet"
+  },
+
+		"Removed Revision": {
+    "scope": "abap",
+    "prefix": "removed",
+    "body": [
+			"*{ Removed ${1:Search Str}",
+			"${0}",
+			"*} Removed ${1:Search Str}"
+    ],
+    "description": "Removed Revision snippet"
+  },
+
+		"Removed Revision Start": {
+    "scope": "abap",
+    "prefix": "removed-1",
+    "body": [
+			"*{ Removed ${1:Search Str}",
+    ],
+    "description": "Removed Revision Start snippet"
+  },
+
+		"Removed Revision End": {
+    "scope": "abap",
+    "prefix": "removed-2",
+    "body": [
+			"*} Removed ${1:Search Str}"
+    ],
+    "description": "Removed Revision End snippet"
+  },
+
+		"Write String": {
+    "scope": "abap",
+    "prefix": "write",
+    "body": [
+			"WRITE |${1:String}|.",
+    ],
+    "description": "Write String snippet"
+  },
+
+		"Test snippet": {
+		"scope": "abap",
+		"prefix": "test",
+		"body": "test('$1', () => {\n\t$0\n});",
+		"description": "Insert test block"
+	}
+	// Place your OUC(ABAP) workspace snippets here. Each snippet is defined under a snippet name and has a scope, prefix, body and 
+	// description. Add comma separated ids of the languages where the snippet is applicable in the scope field. If scope 
+	// is left empty or omitted, the snippet gets applied to all languages. The prefix is what is 
+	// used to trigger the snippet and the body will be expanded and inserted. Possible variables are: 
+	// $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. 
+	// Placeholders with the same ids are connected.
+	// Example:
+	// "Print to console": {
+	// 	"scope": "javascript,typescript",
+	// 	"prefix": "log",
+	// 	"body": [
+	// 		"console.log('$1');",
+	// 		"$2"
+	// 	],
+	// 	"description": "Log output to console"
+	// }
+	//
+	// You can also restrict snippets to specific files using include/exclude patterns:
+	// "Test snippet": {
+	// 	"scope": "javascript,typescript",
+	// 	"prefix": "test",
+	// 	"body": "test('$1', () => {\n\t$0\n});",
+	// 	"include": ["**/*.test.ts", "*.spec.ts"],
+	// 	"exclude": ["**/temp/*.ts"],
+	// 	"description": "Insert test block"
+	// }
+}
