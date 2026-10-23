@@ -1,0 +1,11 @@
+{
+	"mcpServers": {
+		"alm-v2-prd": {
+			"type": "http",
+			"url": "https://alm-ai-gateway.digital.oocl.com/v2/mcp",
+			"tools": [
+				"*"
+			]
+		}
+	}
+}

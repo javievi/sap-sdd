@@ -1,4 +1,4 @@
-# SDD Studio 0.4.0 — named architect runtime
+# SDD Studio 0.4.1 — named architect runtime
 
 The portal now creates a **real Copilot SDK session**, registers the actual
 repository `sdd-architect.agent.md` body as the `sdd-architect` custom agent,
@@ -20,18 +20,18 @@ If that layout differs, supply `-NodePath 'C:\known\path\Code.exe'`. Node must
 meet the SDK floor: 20.19+ on Node 20, or 22.12+ (not Node 21).
 No ordinary `node`, `npm`, or `copilot` on PATH is required.
 
-When `-NpmCli` is not supplied, the script downloads public **npm 10.9.2**,
-checks its SHA-512 against its HTTPS registry metadata, and extracts it into
-`%LOCALAPPDATA%\sdd-studio-build`. Organizations may instead supply their
-approved `-NpmCli` path. No machine-wide execution-policy changes are made.
+No npm registry is needed. `install-runtime.js` downloads the official GitHub
+Copilot CLI **1.0.102 Windows x64 portable release**, checks its SHA-256 against
+GitHub release metadata, and uses the matched public SDK bundled in the CLI's
+self-extracted package. It does not reuse VS Code's older internal SDK.
+The payload and license are packaged under `vendor/copilot`; provenance records
+the official release URL, asset digest, SDK digest, and executable digest.
+Windows system certificate trust is used; TLS verification is not disabled.
+No machine-wide execution-policy changes are made.
 
-The installer creates a lockfile if absent, then uses `npm ci --omit=dev
---ignore-scripts`, checks JavaScript syntax, runs the explicit fixture suites,
-verifies SDK/native-runtime files, builds a VSIX with production dependencies
-and licenses, checks required archive entries, and installs **0.4.0**.
-Optional dependencies must remain enabled: they contain the native runtime.
-Keep the generated lockfile for reproducible subsequent installs; first-time
-transitive resolution is not frozen until that file exists.
+The installer checks JavaScript syntax, runs explicit fixture suites, builds
+a VSIX with the matched SDK/runtime and license, checks required archive
+entries, and installs **0.4.1**. Only Windows x64 is currently supported.
 
 **Reload the VS Code window after installation**, then run **SDD Studio:
 Open Live Portal**. `-OpenPortal` only requests opening; it cannot prove that
@@ -42,6 +42,10 @@ Installation/test commands are user setup operations, never agent tools.
 
 Runtime authentication is separate from ALM OAuth and VS Code chat models.
 The SDK has a private `COPILOT_HOME` under this extension's global storage.
+Version 0.4.1 fixes a login mismatch: SDK empty mode disabled access to the
+Windows credential store used by the setup CLI. The runtime now uses CLI-mode
+authentication in the same private home, with session restrictions explicitly
+enforced. Existing successful sign-ins do not need to be repeated.
 If sign-in is required:
 
 1. Run **SDD Studio: Runtime Sign-in Instructions**.
@@ -86,6 +90,12 @@ credentials or arbitrary MCP endpoints.
 
 ## Generation and verified invocation
 
+The scoped `read_file` tool explicitly overrides the runtime's built-in tool
+of the same name. Its exact-path, in-memory restrictions remain unchanged.
+Without this declaration, runtime 1.0.102 rejects tool initialization before
+generation and the portal reports a generic named-architect execution failure.
+Reinstall using `.\Install.ps1` and reload VS Code to apply this fix.
+
 1. Open the portal, select the `sapsdd` guidance repository, connect ALM/OUC
    and explicitly choose the runtime model.
 2. Enter `ST` plus digits. Debounced ALM lookup still only fills editable
@@ -97,7 +107,10 @@ credentials or arbitrary MCP endpoints.
 4. The named architect reads guidance/current spec, the one ALM story, and
    selected OUC objects through the host's bounded tools. Blocking questions
    use `ask_user` and VS Code UI; cancellation stops the run.
-5. `write_spec` stages full canonical Markdown **in memory**. The host checks
+5. `stage_spec_chunk` buffers ordered Markdown chunks **in memory**, at most
+   12,000 characters per call. `write_spec` with empty `markdown` assembles and
+   validates them, avoiding model output-limit truncation of a full document.
+   Chunks can be replaced by index to correct a rejected draft. The host checks
    all fourteen template headings, stable subheadings/table column contracts,
    story/revision/date/control fields, BR/AC/plan/test ID presence and old
    revision-history rows. This is **structural template validation, not a
@@ -121,9 +134,33 @@ abort; already-started external read calls may finish if their provider
 does not support cancellation. Cancellation after the atomic save has
 committed cannot undo a saved spec; inspect the path after a late disconnect.
 
+If the architect ends without staging, the host asks the same named session
+once to complete chunked staging within the original eight-minute budget.
+There is no different-model, different-agent or unvalidated-output fallback.
+Output-limit truncation is reported explicitly. A summary of an existing Ready
+specification is not a successful generation.
+
+Validation failures are returned to the architect with the exact reason and
+shown in portal progress. It is instructed to correct and resubmit the full
+draft within the existing turn budget (up to three staging attempts). Existing
+BR/AC/plan/test IDs must remain, marked superseded with a reason when obsolete.
+An unresolved failure reports the validation reason; invalid drafts are never
+saved.
+
+The portal architect suggests code changes like Ask mode: object/routine
+locations, current versus proposed behavior, prose or pseudocode, and proposed
+validation belong in the design and implementation plan. It does not implement
+ABAP changes, activate objects, run tests or hand off to an implementer.
+
 ## Least-privilege tool boundary
 
-SDK `mode: "empty"` and source-qualified `availableTools` are used. Ambient
+SDK `mode: "copilot-cli"` permits the runtime to use the Windows credential
+store without copying tokens into the extension. Source-qualified
+`availableTools` and deny-wins exclusions restrict every session. The former
+empty-mode session defaults are explicitly retained, including in-memory MCP
+OAuth storage, no built-in skills, no scheduler, no coauthor operations, and
+removal of the ambient environment prompt. Installed plugins are cleared by
+session RPC before agent selection; failure prevents invocation. Ambient
 configuration discovery, repository hooks, host Git operations, memory,
 session-store retrieval, skill/plugin/agent directory discovery, remote
 sessions and experimental features are disabled. The runtime working
@@ -139,7 +176,8 @@ The exact model-facing tools are:
 | `abapfs_search_objects` | Exact selected program/class names on OUC only; no wildcard discovery |
 | `abapfs_get_object_source` | Confirmed selected objects, active version, OUC only; 350 lines per call |
 | `abapfs_analyze_object_relations` | Confirmed selected objects, OUC only, used relationships, at most 30 |
-| `write_spec` | Only `specs/<current-ST-id>.md`; validates and stages, cannot write disk itself |
+| `stage_spec_chunk` | Exact story path, sequential/replacement indexes 0-63, at most 12,000 characters per call and 500,000 assembled bytes; memory only |
+| `write_spec` | Only `specs/<current-ST-id>.md`; validates a supplied document or buffered chunks, cannot write disk itself |
 | `ask_user` | Blocking question through host VS Code UI |
 
 SAP evidence is capped at 120,000 characters, with 120 tool calls per run.
@@ -199,11 +237,12 @@ service. Model/runtime providers may retain requests under their policies.
 
 ## Verified SDK/runtime API source
 
-Pinned packages: **`@github/copilot-sdk` 1.0.25** and human sign-in CLI
-**`@github/copilot` 1.0.102**. The SDK's published manifest declares runtime
-**1.0.102**, delivered in platform-specific optional SDK packages.
-Startup checks the installed SDK manifest matches this pair and verifies the
-running runtime's `client.getStatus().version` is exactly 1.0.102.
+Pinned vendor release: **Copilot CLI 1.0.102 and its bundled public SDK**.
+The source/API contract was checked against SDK 1.0.25, which declares the same
+runtime version, and against the portable release's SDK declarations.
+Provenance identifies the installed SDK as `CLI-bundled-1.0.102`, not as an
+npm-installed package. Startup verifies its recorded SDK digest and the running
+runtime's `client.getStatus().version` is exactly 1.0.102.
 
 Official source checked for this implementation:
 
@@ -214,8 +253,8 @@ Official source checked for this implementation:
 - [Runtime resolution and platform artifacts](https://github.com/github/copilot-sdk/blob/v1.0.25/nodejs/src/runtimeArtifacts.ts)
 - [Bundled CLI setup/authentication](https://github.com/github/copilot-sdk/blob/v1.0.25/docs/setup/bundled-cli.md)
 
-The package manifests and published declarations were also checked against
-the versioned published npm artifacts. A newer SDK is not assumed compatible.
+The matched release is bundled rather than resolving newer dependencies from
+npm. A newer SDK/runtime is not assumed compatible.
 
 ## Tests versus live validation
 

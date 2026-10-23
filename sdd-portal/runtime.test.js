@@ -9,7 +9,7 @@ const syncFs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { GUIDANCE, TEMPLATE, validateCanonical, persist, withHistory, storyPath, loadContext } = require("./canonical");
-const { createAudit, runArchitect, AVAILABLE, TOOL_NAMES } = require("./architect-runtime");
+const { createAudit, runtimeOptions, runArchitect, AVAILABLE, TOOL_NAMES } = require("./architect-runtime");
 const template = syncFs.readFileSync(path.join(__dirname, "..", ...TEMPLATE.split("/")), "utf8");
 const date = "2026-10-22";
 
@@ -24,6 +24,7 @@ function specification(revision = "R001", oldRow = "") {
   return text.replace(/^\| R001 \| .+ \|$/m, `${oldRow ? oldRow + "\n" : ""}| ${revision} | ${date} | Fixture source | BR-001 / AC-001 | P-001 / T-001 | Not obtained |`);
 }
 const initial = specification();
+const largeDraft = initial.replace(/^## .+$/gm, heading => `${heading}\n\n${"Fixture-only retained evidence and proposed validation detail. ".repeat(60)}`);
 const historyRow = `| R001 | ${date} | Fixture source | BR-001 / AC-001 | P-001 / T-001 | Not obtained |`;
 const options = { storyId: "ST123456", template, previous: null, date };
 
@@ -51,11 +52,21 @@ function fixtureClient(mode = "valid", token = cancellation()) {
       client.call = call;
       return {
         sessionId: "FIXTURE-NOT-LIVE",
-        rpc: { agent: { async select({ name }) {
+        rpc: { options: { async update(patch) {
+          if (mode === "plugin-failure") throw new Error("Fixture plugin restriction failure");
+          client.optionPatch = patch;
+        } }, agent: { async select({ name }) {
+          assert.deepEqual(client.optionPatch, { installedPlugins: [] });
+          client.selected = true;
           if (mode !== "no-selection-event") emit("subagent.selected", { agentName: mode === "wrong-agent" ? "other-agent" : name });
           return { agent: { name: mode === "wrong-agent" ? "other-agent" : name } };
         } } },
-        async sendAndWait() {
+        async sendAndWait(request, timeout) {
+          client.turns = (client.turns || 0) + 1;
+          client.timeouts = [...(client.timeouts || []), timeout];
+          if (!value.tools.find(tool => tool.name === "read_file")?.overridesBuiltInTool) {
+            throw new Error('External tool "read_file" conflicts with a built-in tool of the same name.');
+          }
           if (mode === "no-execution") return;
           if (mode === "cancel") { token.cancel(); return; }
           if (mode === "forbidden-event") emit("tool.execution_start", { toolName: "bash" });
@@ -68,7 +79,46 @@ function fixtureClient(mode = "valid", token = cancellation()) {
           await call("abapfs_search_objects", { objectName: "ZDEMO", connectionId: "OUC" });
           await call("abapfs_get_object_source", { objectName: "ZDEMO", connectionId: "OUC", startLine: 1 });
           await call("abapfs_analyze_object_relations", { objectName: "ZDEMO", connectionId: "OUC" });
+          if (mode === "truncated-recovery" && client.turns === 1) {
+            emit("tool.execution_start", { toolName: "write_spec" });
+            emit("tool.execution_complete", { success: false, error: { message: "Tool call arguments truncated by the model output token limit" } });
+            emit("assistant.message", { content: "Existing spec is already complete." });
+            emit("session.idle", { aborted: false });
+            return;
+          }
+          if (mode === "chunked" || mode === "chunked-large" || mode === "truncated-recovery") {
+            if (mode === "truncated-recovery") assert.match(request.prompt, /truncated by the model output limit/);
+            const rejected = await call("stage_spec_chunk", { path: "specs/ST123456.md", index: 1, markdown: "gap" });
+            assert.equal(rejected.resultType, "failure");
+            const oversized = await call("stage_spec_chunk", { path: "specs/ST123456.md", index: 0, markdown: "x".repeat(12001) });
+            assert.equal(oversized.resultType, "failure");
+            const parts = [];
+            for (const paragraph of (mode === "chunked-large" ? largeDraft : initial).trimEnd().split("\n\n")) {
+              if (!parts.length || parts.at(-1).length + paragraph.length + 2 > 12000) parts.push(paragraph);
+              else parts[parts.length - 1] += "\n\n" + paragraph;
+            }
+            await call("stage_spec_chunk", { path: "specs/ST123456.md", index: 0, markdown: "replace me" });
+            for (const [index, markdown] of parts.entries()) {
+              const result = await call("stage_spec_chunk", { path: "specs/ST123456.md", index, markdown });
+              assert.equal(typeof result, "string");
+            }
+            await call("write_spec", { path: "specs/ST123456.md", markdown: "" });
+            emit("assistant.message", { content: "Chunked fixture staged." });
+            emit("session.idle", { aborted: false });
+            return;
+          }
           if (mode === "bad-path") { await call("write_spec", { path: "specs/ST999.md", markdown: initial }); return; }
+          if (mode === "validation-retry" || mode === "validation-stop") {
+            const rejected = await call("write_spec", { path: "specs/ST123456.md", markdown: "# ST123456 - incomplete" });
+            assert.equal(rejected.resultType, "failure");
+            assert.match(rejected.textResultForLlm, /headings/);
+            assert.match(rejected.textResultForLlm, /call write_spec again/);
+            if (mode === "validation-stop") {
+              emit("assistant.message", { content: "Could not correct the draft." });
+              emit("session.idle", { aborted: false });
+              return;
+            }
+          }
           await call("write_spec", { path: "specs/ST123456.md", markdown: mode === "abridged" ? "# ST123456 - six sections only" : initial });
           if (mode === "deselected") emit("subagent.deselected");
           if (mode === "error") emit("session.error", { message: "fixture failure" });
@@ -137,6 +187,24 @@ test("FIXTURE: snapshot growth is linear and retains previous snapshots", () => 
   assert.equal(third.split("Preserved prior spec R002").length - 1, 1);
 });
 
+test("FIXTURE: startup retains Windows login lookup in the same private home", () => {
+  const connection = { kind: "stdio" };
+  const options = runtimeOptions("C:\\fixture-home", connection);
+  assert.equal(options.mode, "copilot-cli");
+  assert.equal(options.useLoggedInUser, true);
+  assert.equal(options.enableRemoteSessions, false);
+  assert.equal(options.baseDirectory, "C:\\fixture-home");
+  assert.equal(options.workingDirectory, options.baseDirectory);
+  assert.equal(options.connection, connection);
+});
+
+test("FIXTURE: plugin restriction failure stops before agent selection", async () => {
+  const client = fixtureClient("plugin-failure");
+  await assert.rejects(run("plugin-failure", { client }), /could not disable installed plugins/);
+  assert.equal(client.selected, undefined);
+  assert.ok(client.disconnected);
+});
+
 test("FIXTURE: real named-agent adapter requires select + runtime events and exact tools; no model override", async () => {
   const { result, client } = await run();
   assert.equal(result.invocation.agent, "sdd-architect");
@@ -147,9 +215,25 @@ test("FIXTURE: real named-agent adapter requires select + runtime events and exa
   assert.deepEqual(config.allowedModels, [config.model]);
   assert.deepEqual(config.availableTools, AVAILABLE);
   assert.deepEqual(config.tools.map(tool => tool.name), TOOL_NAMES);
+  assert.equal(config.tools.find(tool => tool.name === "read_file").overridesBuiltInTool, true);
+  assert.ok(config.tools.filter(tool => tool.name !== "read_file").every(tool => tool.overridesBuiltInTool === undefined));
   assert.equal(config.customAgents[0].model, undefined);
   assert.equal(config.enableConfigDiscovery, false);
   assert.equal(config.enableHostGitOperations, false);
+  for (const flag of ["enableFileHooks", "enableSessionStore", "enableSkills",
+    "enableOnDemandInstructionDiscovery", "enableExperimentalMode", "enableSessionTelemetry",
+    "coauthorEnabled", "manageScheduleEnabled"]) assert.equal(config[flag], false, flag);
+  assert.equal(config.customAgentsLocalOnly, true);
+  assert.equal(config.skipCustomInstructions, true);
+  assert.equal(config.skipEmbeddingRetrieval, true);
+  assert.equal(config.embeddingCacheStorage, "in-memory");
+  assert.equal(config.mcpOAuthTokenStorage, "in-memory");
+  assert.deepEqual(config.includedBuiltinSkills, []);
+  assert.deepEqual(config.memory, { enabled: false });
+  assert.deepEqual(config.systemMessage, {
+    mode: "customize", sections: { environment_context: { action: "remove" } },
+  });
+  assert.deepEqual(client.optionPatch, { installedPlugins: [] });
   assert.deepEqual(config.onPermissionRequest({ kind: "shell" }), { kind: "reject" });
   assert.equal(config.hooks.onPreToolUse({ toolName: "bash" }).permissionDecision, "deny");
   assert.ok(client.disconnected);
@@ -167,6 +251,51 @@ test("FIXTURE: selection alone is not invocation proof", () => {
   audit.selected = true;
   audit.observe({ type: "subagent.selected", data: { agentName: "sdd-architect" } });
   assert.throws(() => audit.assert(), /not verified/);
+});
+
+test("FIXTURE: validation feedback reaches the architect and permits corrected staging", async () => {
+  const messages = [];
+  const { result, client } = await run("validation-retry", { progress: message => messages.push(message) });
+  assert.equal(result.candidate, initial.replace(/\r\n/g, "\n").trim() + "\n");
+  assert.ok(messages.some(message => /Specification validation failed:.*headings/.test(message)));
+  const prompt = client.config().customAgents[0].prompt;
+  assert.match(prompt, /Preserve EVERY existing BR-NNN/);
+  assert.match(prompt, /at most three staging attempts/);
+  assert.match(prompt, /Behave like Ask mode for code/);
+  assert.match(prompt, /Never implement changes, edit ABAP/);
+});
+
+test("FIXTURE: unresolved validation reports the exact reason rather than generic completion", async () => {
+  await assert.rejects(run("validation-stop"), /Specification was not staged or saved:.*headings/);
+});
+
+test("FIXTURE: existing test IDs must survive revision or be explicitly superseded", () => {
+  const previous = initial + "\nT-016: Existing boundary test.\n";
+  const next = specification("R002", historyRow);
+  assert.throws(() => validateCanonical(next, { ...options, previous }), /Preserve stable ID T-016/);
+  assert.equal(validateCanonical(next + "\nT-016: Superseded by T-001 because the boundary changed.\n",
+    { ...options, previous }).revision, "R002");
+});
+
+test("FIXTURE: ordered chunks assemble the exact canonical candidate and allow corrections", async () => {
+  const { result } = await run("chunked");
+  assert.equal(result.candidate, initial.replace(/\r\n/g, "\n").trim() + "\n");
+});
+
+test("FIXTURE: truncated output recovers in the same named session with the remaining budget", async () => {
+  const messages = [];
+  const { result, client } = await run("truncated-recovery", { progress: message => messages.push(message) });
+  assert.equal(result.candidate, initial.replace(/\r\n/g, "\n").trim() + "\n");
+  assert.equal(client.turns, 2);
+  assert.ok(client.timeouts[1] <= client.timeouts[0]);
+  assert.ok(messages.some(message => /output limit truncated/.test(message)));
+  assert.deepEqual(client.config().allowedModels, ["FIXTURE-EXPLICIT-MODEL"]);
+});
+
+test("FIXTURE: a document larger than one tool call stages without dropping sections or evidence", async () => {
+  assert.ok(largeDraft.length > 50000);
+  const { result } = await run("chunked-large");
+  assert.equal(result.candidate, largeDraft.replace(/\r\n/g, "\n").trim() + "\n");
 });
 
 test("FIXTURE: no automatic/inherited model and no alternate canonical folder", async () => {

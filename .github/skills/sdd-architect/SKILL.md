@@ -1,10 +1,9 @@
 ---
 name: sdd-architect
 description: "Turn BA/user requirements into a finalized ABAP story spec with technical design, acceptance criteria, and an embedded implementation plan."
-agent: sdd-architect
+disable-model-invocation: true
 argument-hint: "Story ID plus BA requirements or source files; optionally request implementation after analysis"
 ---
-
 Use the [SDD workflow](../skills/sdd-spec/SKILL.md) to create or finalize
 `specs/<story-id>.md` from the supplied requirements and verified code context.
 Include the complete developer-ready design and implementation plan in this

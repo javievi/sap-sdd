@@ -1,10 +1,9 @@
 ---
 name: sdd-revise
 description: "Revise an existing story spec first, then synchronize affected ABAP code and tests with the new revision."
-agent: sdd-architect
+disable-model-invocation: true
 argument-hint: "specs/<story-id>.md and the BA/user change; optionally spec only"
 ---
-
 Apply the supplied change using the
 [SDD revision workflow](../skills/sdd-spec/SKILL.md). Read the current spec and
 affected code, append a revision, update the current requirements/design/plan/
