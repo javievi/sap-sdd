@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const path = require("node:path");
 const { ALLOWED } = require("./bridge");
 
-for (const [transport, scenario] of [["vscode", "saved"], ["http", "saved"], ["vscode", "declined"], ["vscode", "unverified"]]) {
+for (const [transport, scenario] of [["vscode", "saved"], ["http", "saved"], ["vscode", "preview-failed"], ["vscode", "cancelled"], ["vscode", "unverified"]]) {
 test(`FIXTURE ONLY: HTTP bridge ${transport}/${scenario}, reads separate from named runtime`, async () => {
   const commands = new Map();
   const calls = [];
@@ -16,6 +16,7 @@ test(`FIXTURE ONLY: HTTP bridge ${transport}/${scenario}, reads separate from na
   let httpAlmCalls = 0;
   const model = { id: "test-only", name: "Fixture model" };
   let saves = 0;
+  const previewCommands = [];
   const canonicalFixture = {
     loadContext: async () => ({ relative: "specs/ST123456.md", revision: "R001" }),
     persist: async (_context, markdown) => { saves++; return { markdown, canonicalPath: "specs/ST123456.md", revision: "R001" }; },
@@ -27,6 +28,7 @@ test(`FIXTURE ONLY: HTTP bridge ${transport}/${scenario}, reads separate from na
       await getStory(input.storyId, token);
       await invoke("abapfs_get_object_source", { connectionId: "OUC" }, token);
       if (scenario === "unverified") throw new Error("Named sdd-architect invocation was not verified; no fallback.");
+      if (scenario === "cancelled") token.isCancellationRequested = true;
       return { candidate: "# FIXTURE ONLY - not a live invocation", evidence: [], limitations: [],
         invocation: { agent: "sdd-architect", sessionId: "fixture", sdkVersion: "fixture", runtimeVersion: "fixture", verified: true } };
     },
@@ -40,17 +42,19 @@ test(`FIXTURE ONLY: HTTP bridge ${transport}/${scenario}, reads separate from na
     CancellationTokenSource,
     LanguageModelChatMessage: { User: content => ({ content }) },
     Uri: { file: fsPath => ({ fsPath }), parse: value => ({ value }), joinPath: (root, ...parts) => ({ fsPath: path.join(root.fsPath, ...parts) }) },
-    workspace: { isTrusted: true, openTextDocument: async value => value, fs: { readFile: async () => Buffer.from("Fixture guidance only.") } },
+    workspace: { isTrusted: true, openTextDocument: async value => ({ ...value, uri: "untitled:fixture" }), fs: { readFile: async () => Buffer.from("Fixture guidance only.") } },
     window: {
       createOutputChannel: () => ({ appendLine() {}, show() {}, dispose() {} }),
       showOpenDialog: async () => [{ fsPath: "C:\\fixture-guidance" }],
       showQuickPick: async options => options[0],
       showTextDocument: async () => {},
-      showInformationMessage: async () => scenario === "declined" ? undefined : "Save canonical specification",
+      showInformationMessage: async () => { throw new Error("Unexpected confirmation dialog"); },
+      showInputBox: async () => { throw new Error("Unexpected generation question"); },
       showWarningMessage() {}, showErrorMessage(message) { throw new Error(message); },
       registerUriHandler: () => ({ dispose() {} }),
     },
-    commands: { registerCommand: (name, handler) => { commands.set(name, handler); return { dispose() {} }; } },
+    commands: { registerCommand: (name, handler) => { commands.set(name, handler); return { dispose() {} }; },
+      executeCommand: async (name, uri) => { previewCommands.push({ name, uri }); if (scenario === "preview-failed") throw new Error("Preview unavailable"); } },
     env: { openExternal: async uri => { openedUrl = uri.value; return true; } },
     lm: {
       tools: [...ALLOWED].map(name => ({ name })),
@@ -101,14 +105,15 @@ test(`FIXTURE ONLY: HTTP bridge ${transport}/${scenario}, reads separate from na
     input.target = "OUC";
     const response = await fetch(`${origin}/api/generate`, { method: "POST", headers, body: JSON.stringify(input) });
     const events = (await response.text()).trim().split("\n").map(JSON.parse);
-    if (scenario === "saved") {
+    if (scenario === "saved" || scenario === "preview-failed") {
       assert.equal(events.at(-1).type, "result", JSON.stringify(events));
       assert.equal(events.at(-1).document.canonicalPath, "specs/ST123456.md");
       assert.equal(saves, 1);
+      assert.deepEqual(previewCommands, [{ name: "markdown.showPreviewToSide", uri: "untitled:fixture" }]);
     } else {
       assert.equal(events.at(-1).type, "error", JSON.stringify(events));
-      assert.equal(saves, 0, "Declined or unverified runs must never persist a canonical revision");
-      assert.match(events.at(-1).message, scenario === "declined" ? /not approved/ : /not verified/);
+      assert.equal(saves, 0, "Cancelled or unverified runs must never persist a canonical revision");
+      assert.match(events.at(-1).message, scenario === "cancelled" ? /cancelled/ : /not verified/);
     }
     assert.equal(modelCalls, 1);
     assert.equal(httpAlmCalls, transport === "vscode" ? 0 : 2, "Native ALM must not make separate unauthenticated HTTP requests");

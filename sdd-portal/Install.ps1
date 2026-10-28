@@ -47,15 +47,15 @@ try {
     Push-Location $PSScriptRoot
     try {
         Invoke-Node -NodeArguments @('--use-system-ca', 'install-runtime.js')
-        foreach ($file in @('extension.js', 'architect-runtime.js', 'canonical.js', 'app.js')) {
+        foreach ($file in @('extension.js', 'architect-runtime.js', 'canonical.js', 'app.js', 'preview.js')) {
             Invoke-Node -NodeArguments @('--check', $file)
         }
-        Invoke-Node -NodeArguments @('--test', '--test-isolation=none', '--test-reporter=tap', 'bridge.test.js', 'extension.test.js', 'mcp.test.js', 'alm.test.js', 'oauth.test.js', 'runtime.test.js')
+        Invoke-Node -NodeArguments @('--test', '--test-isolation=none', '--test-reporter=tap', 'bridge.test.js', 'extension.test.js', 'mcp.test.js', 'alm.test.js', 'oauth.test.js', 'runtime.test.js', 'preview.test.js')
     } finally { Pop-Location }
 
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $files = @('package.json', 'extension.js', 'architect-runtime.js', 'canonical.js', 'bridge.js', 'mcp.js', 'alm.js', 'oauth.js', 'index.html', 'styles.css', 'app.js', 'bootstrap.js', 'README.md')
+    $files = @('package.json', 'extension.js', 'architect-runtime.js', 'canonical.js', 'bridge.js', 'mcp.js', 'alm.js', 'oauth.js', 'index.html', 'styles.css', 'app.js', 'preview.js', 'bootstrap.js', 'README.md')
     foreach ($file in [System.IO.Directory]::EnumerateFiles((Join-Path $PSScriptRoot 'vendor'), '*', [System.IO.SearchOption]::AllDirectories)) {
         $files += $file.Substring($PSScriptRoot.Length + 1)
     }

@@ -78,7 +78,15 @@ function fixtureClient(mode = "valid", token = cancellation()) {
           await call("alm_story_detail", { storyId: "ST123456" });
           await call("abapfs_search_objects", { objectName: "ZDEMO", connectionId: "OUC" });
           await call("abapfs_get_object_source", { objectName: "ZDEMO", connectionId: "OUC", startLine: 1 });
-          await call("abapfs_analyze_object_relations", { objectName: "ZDEMO", connectionId: "OUC" });
+          if (mode !== "skipped-relations") {
+            const relations = await call("abapfs_analyze_object_relations", { objectName: "ZDEMO", connectionId: "OUC" });
+            if (mode === "relations-fail" || mode === "relations-recover") {
+              assert.equal(relations.resultType, "failure");
+              assert.match(relations.textResultForLlm, /Draft\/Blocked/);
+              assert.doesNotMatch(relations.textResultForLlm, /PRIVATE_TOKEN/);
+            }
+            if (mode === "relations-recover") await call("abapfs_analyze_object_relations", { objectName: "ZDEMO", connectionId: "OUC" });
+          }
           if (mode === "truncated-recovery" && client.turns === 1) {
             emit("tool.execution_start", { toolName: "write_spec" });
             emit("tool.execution_complete", { success: false, error: { message: "Tool call arguments truncated by the model output token limit" } });
@@ -119,7 +127,7 @@ function fixtureClient(mode = "valid", token = cancellation()) {
               return;
             }
           }
-          await call("write_spec", { path: "specs/ST123456.md", markdown: mode === "abridged" ? "# ST123456 - six sections only" : initial });
+          await call("write_spec", { path: "specs/ST123456.md", markdown: mode === "abridged" ? "# ST123456 - six sections only" : mode === "relations-fail" ? initial.replace("| Specification status | Draft |", "| Specification status | Ready |") : initial });
           if (mode === "deselected") emit("subagent.deselected");
           if (mode === "error") emit("session.error", { message: "fixture failure" });
           emit("assistant.message", { content: "Fixture complete, not live." });
@@ -134,6 +142,7 @@ function fixtureClient(mode = "valid", token = cancellation()) {
   return client;
 }
 async function run(mode = "valid", supplied = {}) {
+  let relationReads = 0;
   const token = supplied.token || cancellation();
   const client = supplied.client || fixtureClient(mode, token);
   const result = await runArchitect({
@@ -142,6 +151,12 @@ async function run(mode = "valid", supplied = {}) {
     async getStory() { return { title: "Fixture", raw: "Fixture ALM evidence, not live." }; },
     async invoke(name, args) {
       assert.equal(args.connectionId, "OUC");
+      if (mode === "discovery-fail" && name === "abapfs_search_objects") return { text: "No supported program/class found.", data: [] };
+      if (mode === "source-fail" && name === "abapfs_get_object_source") throw new Error("PRIVATE_TOKEN: fixture error");
+      if (name === "abapfs_analyze_object_relations") {
+        relationReads++;
+        if (mode === "relations-fail" || (mode === "relations-recover" && relationReads === 1)) throw new Error("PRIVATE_TOKEN: fixture error");
+      }
       if (name === "abapfs_search_objects") return { text: "Fixture discovery.", data: [{ name: "ZDEMO", type: "PROG/P" }] };
       if (name === "abapfs_get_object_source") { assert.equal(args.version, "active"); assert.equal(args.lineCount, 350); }
       return { text: "Fixture SAP evidence, not live." };
@@ -253,6 +268,19 @@ test("FIXTURE: selection alone is not invocation proof", () => {
   assert.throws(() => audit.assert(), /not verified/);
 });
 
+test("FIXTURE: generation never requests confirmation or invents answers to open questions", async () => {
+  const { client } = await run();
+  const config = client.config();
+  assert.equal(config.availableTools.some(name => name.includes("ask_user")), false);
+  assert.equal(config.customAgents[0].tools.includes("ask_user"), false);
+  assert.equal(config.hooks.onPreToolUse({ toolName: "ask_user" }).permissionDecision, "deny");
+  assert.match(config.customAgents[0].prompt, /Do not ask whether to generate canonical specs/);
+  const answer = await config.onUserInputRequest({ question: "Generate any canonical specs?" });
+  assert.match(answer.answer, /Record this unresolved question as a Draft\/Blocked item/);
+  assert.match(answer.answer, /do not assume an answer or approval/);
+  assert.deepEqual(config.onPermissionRequest({ kind: "write" }), { kind: "reject" });
+});
+
 test("FIXTURE: validation feedback reaches the architect and permits corrected staging", async () => {
   const messages = [];
   const { result, client } = await run("validation-retry", { progress: message => messages.push(message) });
@@ -296,6 +324,34 @@ test("FIXTURE: a document larger than one tool call stages without dropping sect
   assert.ok(largeDraft.length > 50000);
   const { result } = await run("chunked-large");
   assert.equal(result.candidate, largeDraft.replace(/\r\n/g, "\n").trim() + "\n");
+});
+
+for (const mode of ["discovery-fail", "source-fail", "relations-fail"]) {
+  test(`FIXTURE: ${mode} permits only an explicit Draft/Blocked candidate with host evidence gaps`, async () => {
+    const messages = [];
+    const { result } = await run(mode, { progress: message => messages.push(message) });
+    assert.match(result.candidate, /\| Specification status \| Draft \|/);
+    assert.match(result.candidate, /\| Development status \| Blocked \|/);
+    assert.match(result.candidate, /### Unverified SAP evidence \(host-recorded\)/);
+    assert.match(result.candidate, /OUC ZDEMO:.*UNVERIFIED/);
+    assert.ok(result.limitations.some(item => /UNVERIFIED/.test(item)));
+    assert.doesNotMatch(JSON.stringify({ result, messages }), /PRIVATE_TOKEN/);
+    if (mode === "discovery-fail") {
+      assert.match(result.candidate, /table and other object types are not supported/);
+      assert.equal(result.evidence.some(item => /OUC ZDEMO:/.test(item)), false);
+    }
+    if (mode === "relations-fail") assert.equal(result.evidence.some(item => /used relationships/.test(item)), false);
+  });
+}
+
+test("FIXTURE: a successful SAP retry clears the gap without forcing a blocked draft", async () => {
+  const { result } = await run("relations-recover");
+  assert.equal(result.candidate, initial.replace(/\r\n/g, "\n").trim() + "\n");
+  assert.equal(result.limitations.some(item => /UNVERIFIED/.test(item)), false);
+});
+
+test("FIXTURE: unattempted relationships still prevent staging", async () => {
+  await assert.rejects(run("skipped-relations"), /Missing abapfs_analyze_object_relations was not attempted/);
 });
 
 test("FIXTURE: no automatic/inherited model and no alternate canonical folder", async () => {

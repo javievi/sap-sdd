@@ -8,6 +8,7 @@
   <title>SDD Studio — From story to specification</title>
   <link rel="stylesheet" href="styles.css">
   <script src="bootstrap.js" defer></script>
+  <script src="preview.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -37,7 +38,7 @@
             <div class="target-field"><div><label for="sap-target">Analysis target</label><p>Active source reads only. No SAP writes.</p></div><select id="sap-target" name="target"><option value="OUC">OUC · SAP connection</option></select></div>
             <div class="form-notice"><span aria-hidden="true">ⓘ</span><p><strong>You control when analysis starts.</strong> Story lookup only fills the form. Review candidate object names, add your changes, then generate.</p></div>
             <button class="generate-button" id="generate-button" type="submit" disabled><span aria-hidden="true">✳</span><span id="generate-label">Generate SDD</span><span class="button-arrow" aria-hidden="true">→</span></button>
-            <p class="privacy-note">Generate invokes the named sdd-architect runtime with your explicitly selected model. Review the full canonical spec and approve saving specs/ST&lt;digits&gt;.md in VS Code. SAP/ALM remain read-only.</p>
+            <p class="privacy-note">Generate invokes the named sdd-architect runtime and automatically saves the validated specs/ST&lt;digits&gt;.md. Open questions remain in the draft. No generation or save confirmation is required; SAP/ALM remain read-only.</p>
           </form>
         </section>
 
@@ -54,7 +55,7 @@
       <footer class="page-footer"><span>SDD Studio <span class="footer-dot">·</span> Built for thoughtful SAP changes</span><span>VS Code companion <span class="footer-dot">/</span> v0.2</span></footer>
     </div>
   </main>
-  <div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
+  <div id="notification" class="notification" role="status" aria-live="polite" hidden><span id="notification-message"></span><button id="dismiss-notification" type="button" aria-label="Dismiss notification">Dismiss</button></div>
   <dialog id="copy-dialog" aria-labelledby="copy-dialog-title"><h2 id="copy-dialog-title">Copy your Markdown</h2><p>Clipboard access is unavailable. Select and copy the document below.</p><textarea id="copy-fallback" readonly aria-label="Specification Markdown"></textarea><form method="dialog"><button class="generate-button" type="submit">Done</button></form></dialog>
 </body>
 </html>

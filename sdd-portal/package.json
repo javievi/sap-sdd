@@ -6,7 +6,7 @@
   "publisher": "local-sdd-tools",
   "engines": { "vscode": "^1.101.0" },
   "main": "./extension.js",
-  "scripts": { "test": "node --test bridge.test.js extension.test.js mcp.test.js alm.test.js oauth.test.js runtime.test.js", "check": "node --check extension.js && node --check architect-runtime.js && node --check canonical.js && node --check app.js" },
+  "scripts": { "test": "node --test bridge.test.js extension.test.js mcp.test.js alm.test.js oauth.test.js runtime.test.js preview.test.js", "check": "node --check extension.js && node --check architect-runtime.js && node --check canonical.js && node --check app.js && node --check preview.js" },
   "activationEvents": ["onUri"],
   "extensionKind": ["ui"],
   "capabilities": { "untrustedWorkspaces": { "supported": false } },

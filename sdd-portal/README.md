@@ -90,6 +90,22 @@ credentials or arbitrary MCP endpoints.
 
 ## Generation and verified invocation
 
+SAP evidence failures do not prevent a reviewable **Draft/Blocked** document.
+Each selected object must have an exact discovery attempt; its source and
+relationships must be read or have a recorded read failure. Failed discovery
+also records dependent source/relationships as unverified. The portal currently
+supports program/class discovery only, not tables or other object types.
+ALM-extracted names are candidates, not proof of supported object types.
+
+The host forces incomplete-evidence candidates to Draft/Blocked and inserts
+an explicit evidence-gap notice in the control section before automatic saving.
+It does not count failures as evidence, invent source facts, or permit skipped
+reads. Full template validation, current ALM evidence, named-agent verification,
+remain mandatory. Generate SDD authorizes the spec save; no second confirmation
+is requested. A successful retry clears the gap.
+Read failures are returned explicitly to the architect and portal progress;
+raw service errors or credentials are not forwarded.
+
 The scoped `read_file` tool explicitly overrides the runtime's built-in tool
 of the same name. Its exact-path, in-memory restrictions remain unchanged.
 Without this declaration, runtime 1.0.102 rejects tool initialization before
@@ -105,8 +121,9 @@ Reinstall using `.\Install.ps1` and reload VS Code to apply this fix.
    current canonical spec. It starts a fresh local SDK session, not a
    previous chat or implementer conversation.
 4. The named architect reads guidance/current spec, the one ALM story, and
-   selected OUC objects through the host's bounded tools. Blocking questions
-   use `ask_user` and VS Code UI; cancellation stops the run.
+   selected OUC objects through the host's bounded tools. Unresolved questions
+   are recorded as Draft/Blocked items rather than prompting in VS Code.
+   No business answer or design approval is inferred. Cancellation stops the run.
 5. `stage_spec_chunk` buffers ordered Markdown chunks **in memory**, at most
    12,000 characters per call. `write_spec` with empty `markdown` assembles and
    validates them, avoiding model output-limit truncation of a full document.
@@ -121,15 +138,22 @@ Reinstall using `.\Install.ps1` and reload VS Code to apply this fix.
    deselection, errors, forbidden tools, no candidate or missing event evidence
    fail explicitly, with no fallback. The selected architect runs as the
    session's active agent; a nested `subagent.started` event is not required.
-7. Review the candidate opened in VS Code. The modal save prompt approves
-   **only the specification save**, not design approval or implementation.
-   Decline/cancellation leaves the canonical file unchanged.
-8. The browser displays escaped canonical Markdown grouped by all canonical
-   sections, plus retained snapshots and runtime provenance. Copy/download
+7. The host automatically saves the validated specification after runtime
+   verification, then opens the saved file and Markdown preview. Clicking
+   Generate SDD authorizes only this spec save, not design approval or
+   implementation. Cancellation before persistence leaves the file unchanged.
+   Preview failures are reported without misreporting a completed save as failed.
+8. The browser displays a formatted Markdown preview with headings, tables,
+   lists, emphasis and code blocks, plus retained snapshots and runtime provenance.
+   Raw HTML is escaped and links are inert. Copy/download
    exports the same saved Markdown, not a six-section derivative.
 
+Portal completion notifications remain visible for 20 seconds. Error
+notifications remain until dismissed or replaced by a newer notification.
+Both have a Dismiss button; generation status also remains in the preview footer.
+
 The generation budget is eight minutes for the SDK turn and ten minutes for
-the request including questions/review. Cancel/disconnect/Stop propagates
+the request including persistence/preview. Cancel/disconnect/Stop propagates
 abort; already-started external read calls may finish if their provider
 does not support cancellation. Cancellation after the atomic save has
 committed cannot undo a saved spec; inspect the path after a late disconnect.
@@ -178,7 +202,12 @@ The exact model-facing tools are:
 | `abapfs_analyze_object_relations` | Confirmed selected objects, OUC only, used relationships, at most 30 |
 | `stage_spec_chunk` | Exact story path, sequential/replacement indexes 0-63, at most 12,000 characters per call and 500,000 assembled bytes; memory only |
 | `write_spec` | Only `specs/<current-ST-id>.md`; validates a supplied document or buffered chunks, cannot write disk itself |
-| `ask_user` | Blocking question through host VS Code UI |
+
+`ask_user` is not exposed. The portal does not ask whether to generate or save.
+Any unexpected runtime input request receives a spec-only continuation directive
+that records the unresolved question rather than inventing a business answer.
+External sign-in, model selection, connection setup and provider permission
+prompts remain subject to their own controls; SAP write permissions stay denied.
 
 SAP evidence is capped at 120,000 characters, with 120 tool calls per run.
 Includes/callers/dependencies not actually read remain unverified. The
@@ -271,12 +300,12 @@ An authenticated live check requires user sign-in, an explicitly selected
 entitled model, a real ST story and accessible OUC objects:
 
 1. Install, reload, sign in, open, select the model and load the real story.
-2. Generate; inspect blocking questions and all fourteen candidate sections.
-3. Approve saving. Confirm the output channel reports **Named-agent invocation
+2. Generate; confirm no generation/save questions appear and inspect all fourteen sections.
+3. Confirm automatic saving and the output channel reports **Named-agent invocation
    verified**, a real session ID, SDK/runtime pair and canonical SHA-256.
 4. Confirm the exact canonical file and downloaded Markdown agree. For an
    existing spec, confirm prior history and full prior evidence remain.
-5. Repeat with declined save/cancellation to confirm no new revision is saved.
+5. Cancel before persistence to confirm no new revision is saved.
 
 **No authenticated live success or test execution is implied by this source
 update.** Runtime/event fixture success, SDK import, native binary presence,

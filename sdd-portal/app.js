@@ -27,11 +27,16 @@ let statusVersion = 0;
 
 function notify(message, isError = false) {
   clearTimeout(notificationTimer);
-  notification.textContent = message;
+  document.querySelector("#notification-message").textContent = message;
   notification.classList.toggle("error", isError);
   notification.hidden = false;
-  notificationTimer = setTimeout(() => { notification.hidden = true; }, 6500);
+  if (!isError) notificationTimer = setTimeout(() => { notification.hidden = true; }, 20000);
 }
+
+document.querySelector("#dismiss-notification").addEventListener("click", () => {
+  clearTimeout(notificationTimer);
+  notification.hidden = true;
+});
 
 function updateControls() {
   generateButton.disabled = !integrationsReady || storyBusy || Boolean(generationController);
@@ -181,14 +186,10 @@ function makeMarkdown(doc) {
 
 function renderDocument(doc) {
   const [current, history] = doc.markdown.split("\n<!-- sdd-portal-history:v1 -->\n");
-  // Escaped canonical Markdown, grouped by the actual full-template sections.
-  // Never insert model HTML, render scripts, or silently substitute a summary.
-  content.innerHTML = `<div class="doc-kicker">CANONICAL SPECIFICATION · NAMED ARCHITECT</div><h3>${escapeHtml(doc.canonicalPath)} / ${escapeHtml(doc.revision)}</h3><div class="doc-meta">OUC · ${escapeHtml(doc.model)} · SDK ${escapeHtml(doc.invocation.sdkVersion)}</div><div class="doc-warning"><strong>Spec save approved; not implementation approval.</strong> Template structure checked, semantic readiness requires human review. No code changes or test execution.</div>` +
-    current.split(/(?=^## )/m).map(part => {
-      const [heading, ...lines] = part.split("\n");
-      return `<section><h4>${escapeHtml(heading.replace(/^#+ /, ""))}</h4><pre class="canonical-markdown">${escapeHtml(lines.join("\n"))}</pre></section>`;
-    }).join("") +
-    (history ? `<details><summary>Preserved prior revisions and evidence</summary><pre class="canonical-markdown">${escapeHtml(history)}</pre></details>` : "") +
+  // The renderer escapes all source HTML and never creates active links.
+  content.innerHTML = `<div class="doc-kicker">CANONICAL SPECIFICATION · NAMED ARCHITECT</div><h3>${escapeHtml(doc.canonicalPath)} / ${escapeHtml(doc.revision)}</h3><div class="doc-meta">OUC · ${escapeHtml(doc.model)} · SDK ${escapeHtml(doc.invocation.sdkVersion)}</div><div class="doc-warning"><strong>Specification saved automatically; not implementation approval.</strong> Template structure checked, semantic readiness requires human review. No code changes or test execution.</div>` +
+    `<article class="markdown-preview">${renderMarkdown(current)}</article>` +
+    (history ? `<details><summary>Preserved prior revisions and evidence</summary><div class="markdown-preview">${renderMarkdown(history)}</div></details>` : "") +
     `<details class="doc-end"><summary>Runtime evidence and analysis limits</summary><p>Agent ${escapeHtml(doc.invocation.agent)}; session ${escapeHtml(doc.invocation.sessionId)}; SHA-256 ${escapeHtml(doc.sha256)}</p><ul>${[...doc.evidence, ...doc.limitations].map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>`;
 }
 

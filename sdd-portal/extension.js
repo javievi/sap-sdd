@@ -60,24 +60,18 @@ function activate(context) {
     const local = await loadContext(guidanceRoot.fsPath, input.storyId);
     const result = await runArchitect({
       client: runtime, modelId: model.id, context: local, input, token, invoke, getStory, progress,
-      ask: async request => {
-        progress("sdd-architect needs a blocking answer. Check VS Code.");
-        if (request.choices?.length && request.allowFreeform === false) {
-          return vscode.window.showQuickPick(request.choices, { title: request.question }, token);
-        }
-        return vscode.window.showInputBox({ title: "SDD Architect: blocking question", prompt: request.question,
-          ignoreFocusOut: true, validateInput: value => value.trim() ? undefined : "An answer is required." }, token);
-      },
     });
     if (token.isCancellationRequested) throw new Error("Generation cancelled.");
-    const preview = await vscode.workspace.openTextDocument({ language: "markdown", content: result.candidate });
-    await vscode.window.showTextDocument(preview, { preview: true, preserveFocus: true });
-    progress(`Runtime invocation verified. Review ${local.relative} in VS Code and approve saving ${local.revision}.`);
-    const approval = await vscode.window.showInformationMessage(
-      `Save ${local.relative} revision ${local.revision}? Full canonical Markdown is open for review. Existing history/evidence will be preserved. This approves only a spec save, not design implementation.`,
-      { modal: true }, "Save canonical specification");
-    if (approval !== "Save canonical specification" || token.isCancellationRequested) throw new Error("Canonical save not approved or generation cancelled. Existing file unchanged.");
+    progress(`Runtime invocation verified. Saving ${local.relative} ${local.revision} automatically.`);
     const saved = await persist(local, result.candidate, () => token.isCancellationRequested);
+    try {
+      const preview = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(guidanceRoot.fsPath, saved.canonicalPath)));
+      await vscode.window.showTextDocument(preview, { preview: true, preserveFocus: true });
+      await vscode.commands.executeCommand("markdown.showPreviewToSide", preview.uri);
+    } catch (error) {
+      report(error);
+      progress(`Saved ${saved.canonicalPath}, but VS Code could not open its preview. Open the saved file manually.`);
+    }
     output.appendLine(`Named-agent invocation verified: ${result.invocation.agent}; session ${result.invocation.sessionId}; SDK ${result.invocation.sdkVersion}; runtime ${result.invocation.runtimeVersion}. Saved ${saved.canonicalPath} ${saved.revision}; SHA-256 ${saved.sha256}.`);
     return { ...input, ...saved, generatedAt: new Date().toISOString(), model: model.id,
       generationMode: "Named sdd-architect · Copilot SDK runtime · spec-only",
@@ -117,7 +111,7 @@ function activate(context) {
         return res.end(`window.sddSession = ${JSON.stringify({ token: secret })};`);
       }
       if (!route.startsWith("/api/")) {
-        const files = { "/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.js": "app.js" };
+        const files = { "/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.js": "app.js", "/preview.js": "preview.js" };
         if (req.method !== "GET" || !files[route]) return json(res, 404, { error: "Not found." });
         const file = files[route];
         const body = await fs.readFile(path.join(context.extensionPath, file));
